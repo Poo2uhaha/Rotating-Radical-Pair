@@ -1,0 +1,105 @@
+README
+(*****************************)
+Eq. X.XX in the code refers to J Lau's Part II thesis.
+
+Calculation[m,n,w,HFI,dc,k,False]
+
+m,n=number of different angles sampled (12,12 works well; see below), m must be EVEN. 
+
+w=external field strength in mT
+
+HFI must be a list of terms of the form {"A",isotropic strength, axial strength}
+e.g. for a 4-spin radical pair with only isotropic interactions on B you might have:
+HFI={{"A",1,1},{"A",1,1},{"B",1,0},{"B",1,0}}
+isotropic term = (A_xx+A_yy+A_zz)/3, axial term = (2A_zz-A_xx-A_yy) (Worster, Kattnig & Hore 2016)
+There are no restrictions on number of spins or anything.
+
+dc = 1/(6*tc) with tc = a correlation time
+
+k = reaction rate
+
+False = do not abort evaluation before integrating; Setting to True lets you examine the hamiltonian and so on without it whirring away in the background. You can change at what point it aborts, by editing the .nb file.
+(******************************)
+
+calculateV3.m can handle any number of spin 1/2s.
+
+For calculateV4.m you can add a "1" to the end of the HFI tuples to make it a spin-1 term.
+E.g. {"A",1.2,0.7,1} is a spin-1 nucleus with 1.2mT isotropic, 0.7mT axial. Anything other than "1" such as "1/2" or "banana" is ignored. 
+Any spin-1s drag out the computation of course. Using calculateV4 with only spin 1/2s is identical to using V3.
+
+calculateV5 is an unfinished script which would accept rhombic interactions in the HFI parameter:
+{"A",isotropic strength, axial strength, rhombic strength, spin-1-or-not}
+The Hamiltonian has been adjusted accordingly but it needs a new diffusion matrix.
+(******************************)
+I.) ACCURACY OF RESULTS:
+
+1.)m=n=12 gives good accuracy while not taking too long to evaluate. There is at most 0.5% difference between yield values using m=n=12 versus m=n=18, which doesn't justify the extra wait I reckon. For larger spin systems you could go with m=n=8 maybe; it's whatever. 
+
+2.)For large mT values the singlet probability might oscillate much faster. So the integration accuracy if left as-is could suffer.
+For any values above 3mT I recommend increasing the "hnum" parameter (~ no. of integration steps) in the script and seeing what the singlet probability looks like as a fct of time (see sect. III). For k=10^6, hnum=1000 by default.
+
+3.)Due to the increasing time step used, the integral of the singlet probability is ~0.1% off of the "perfectly integrated" function due to discretisation errors.
+To improve this error you can: 
+
+increase hnum in the calculateV3 script (note that decreasing dt or h in the script has no effect on accuracy because the step size is entirely determined by hnum)
+
+increase tmax so that the integral from t=0 to infinity is approximated better. Stopping at t=5/k is off by roughly 0.1% at worst
+
+4.)Generally to get better and better accuracy you must have a balance between points 1.) and 3.)
+(******************************)
+II.) SPEED OF COMPUTATION:
+
+1.)For Na_tot=number of nuclei on radical A, and the same for B, the complexity of the problem scales roughly as (m*n*2^Na_tot)^2/k or (m*n*2^Nb_tot)^2/k  whichever is larger. This is because the calculation treats the Liouvillian matrices for A and B separately.
+
+
+***So having 3+3 spins takes at most twice as long as 3+1 spins - NOT 2^(2*2) as long!. Not bad!***
+So 6 spins is certainly feasbile with this script.
+
+
+The complexity given above is not that exact; as the matrices get larger they get more sparse so computation isn't truly exponentially more difficult. It actually does a good job even when you have 3 spins on a given radical tbh. 
+
+The smaller k is, the longer the radical pair lives. But the oscillation of the singlet probability is unaffected (so is still very rapid). So to integrate a longer lived radical pair accurately, the number of sampled points must increase as k decreases -> takes more time therefore.
+
+2.)For whatever reason the Calculation[] evaluates faster if you sub in the HFI array directly to the function argument instead of first defining an HFI and then using that variable as the argument. Similarly for other constants.
+
+So 
+
+Calculation[12,12,1,{{"A",1,1},{"B",1,1}},dc,10^6,False]
+
+evaluates faster than 
+
+m=12
+n=12
+w=1
+HFI = {{"A",1,1},{"B",1,1}}
+k= 10^6
+Calculation[m,n,w,HFI,dc,k,False]
+
+This isn't that well established but I remember it for some reason making a difference one time.
+(..bruh...)
+
+3.)It runs approx 40% faster on 4 cores than on 32 cores.
+
+
+4.)For calculations involving isotropic interactions only, 
+
+**set m=n=2 and dc=0 **
+
+since this will speed it up substantially while leaving the calculation accuracy *completely unaffected*
+
+5.)The script can't seem to evaluate tc=10^-12 - takes >1 hour even for small spin systems.
+Anything greater than or equal to 10^-11 is fine. 
+(*********************************)
+III.) DEBUGGING:
+
+1.) You can see what the singlet probability is doing as a function of time if you evaluate Calculation[] and then run:
+
+t2 = Join[{0}, t];
+ListPlot[Transpose[{t2, \[Sigma]vals}], Joined -> True]
+
+Can help let you know if you're skipping out details by sampling too coarsely or vice versa. 
+
+2.) If you want to add back the constraining potential it is simple. You'd need to add theta back into the Calculation[] & Hamiltionian[] functions, as well as xi (the strength of the potential).
+
+Xi is currently fixed at 0 in the script, i.e. DiffusionMatrix[] is called with xi set to 0.
+Hamiltonian[] currently has the zeeman term as purely along the z-axis. To add back theta you just add back in the sigma-x /sigma-y terms with the sin theta or whatever... look at Peter's original code.
